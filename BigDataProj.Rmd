@@ -1,0 +1,369 @@
+---
+title: "Big Data Project"
+author: "Divina Gracia C. Gorospe"
+date: "12/12/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r libraries, echo=FALSE,message=FALSE}
+library (ggplot2)
+library (readr)
+library(dplyr)
+library(plyr)
+
+library(RColorBrewer)
+library(ggthemes)
+library(scales)
+library(maps)
+library(ggmap)
+library(mapdata)
+library(maptools)
+
+
+
+```
+
+
+
+```{r, echo=FALSE, message=FALSE}
+crimesBig <- read.csv('/Users/Divinagracia/Desktop/R_wd/Crimes_-_2001_to_present.csv')
+```
+
+## Cleaning the Data Set 
+
+### Column/Row Manipulation:
+
+1. Removed data for 2017 (242,568 rows).  
+
+```{r remove2017, echo=FALSE}
+crimesBig<- crimesBig[!(crimesBig$Year==2017), ]
+```
+
+
+2. *Column Name: Season  *  
+*Data Type:  Factor with four levels(winter, spring, summer, fall) *  
+Column added based on the months in 'Date' column.  
+
+
+```{r cleaning, echo=FALSE}
+months <- as.numeric(format(as.Date(crimesBig$Date, '%m/%d/%Y'), '%m'))
+indx <- setNames( rep(c('winter', 'spring', 'summer','fall'),each=3), c(12,1:11))
+crimesBig$Season <- unname(indx[as.character(months)])
+```
+
+3. *Column Name: SchoolGrounds*   
+*Data Type:  Logical*   
+Column added based on the values in "Location.Description" column matching these strings: 
++ College/University Grounds
++ College/University Residence Hall
++ Day Care Center 
++ Public Grammar School 
++ Public High School
++ School Yard
++ School Private Building
++ School Private Grounds
++ School Public Building
++ School Public Grounds
+
+
+
+```{r schoolCol, echo=FALSE}
+school <- c('COLLEGE/UNIVERSITY GROUNDS','COLLEGE/UNIVERSITY RESIDENCE HALL','DAY CARE CENTER', 'PUBLIC GRAMMAR SCHOOL', 'PUBLIC HIGH SCHOOL','SCHOOL YARD','SCHOOL, PRIVATE, BUILDING','SCHOOL, PRIVATE, GROUNDS','SCHOOL, PUBLIC, BUILDING','SCHOOL, PUBLIC, GROUNDS')
+
+crimesBig$SchoolGrounds <- crimesBig$Location.Description %in% school
+
+```
+
+
+4. Changed data type from character strings to factor for columns with categorical data. 
+
+```{r changeType, echo=FALSE}
+crimesBig$Arrest <- as.factor(crimesBig$Arrest)
+crimesBig$Primary.Type <- as.factor(crimesBig$Primary.Type)
+crimesBig$Domestic <- as.factor(crimesBig$Domestic)
+crimesBig$District <-as.factor(crimesBig$District)
+crimesBig$Location.Description <- as.factor(crimesBig$Location.Description)
+crimesBig$District <- as.factor(crimesBig$District)
+crimesBig$Community.Area <- as.factor(crimesBig$Community.Area)
+crimesBig$Season <- factor(crimesBig$Season, levels=c('winter','spring', 'summer', 'fall' ))
+crimesBig$Ward <-as.factor(crimesBig$Ward)
+crimesBig$Year <-as.factor(crimesBig$Year)
+crimesBig$SchoolGrounds <-as.factor(crimesBig$SchoolGrounds)
+```
+
+5. Created a new data frame consisting of all rows matching school. This data set will be used for most of the plots.  
+Number of rows: 188,039
+
+
+```{r crimesData, echo=FALSE}
+crimes<-crimesBig[crimesBig$SchoolGrounds == TRUE, ]
+```
+
+
+
+
+
+##Graphs
+```{r myColor, echo=FALSE}
+#35 different colors
+c1 <-brewer.pal(n=12, name='Set3')
+c2 <-brewer.pal(n=12, name='Paired')
+c3<-brewer.pal(n=8, name='Set1')
+c4<-brewer.pal(n=3, name='Pastel1')
+myColors <- c(c1, c2, c3, c4)
+names(myColors) <- levels(crimes$`Primary Type`)
+mycol <- scale_colour_manual(name = "Primary Type",values = myColors)
+
+m1 <-brewer.pal(n=8, name='Set2') 
+m2<- brewer.pal(n=7, name='Dark2')
+my15 <- c(m1, m2)
+
+```
+
+
+
+```{r myTheme, echo=FALSE}
+myLegend <- theme(legend.title = element_blank(), legend.text = element_text(size=10))
+
+myFill <- scale_fill_manual(values=myColors)
+
+largeText <- theme(axis.text.x = element_text(face="bold", 
+                           size=12),axis.text.y = element_text(face="bold", 
+                           size=12),legend.text = element_text(colour="blue", size=20), legend.position='bottom', legend.background = element_rect(fill="#eaf7f8",size=0.5, linetype="solid"),legend.title = element_blank(),plot.title = element_text(color="black", size=30, face="bold", hjust = 0.5),
+axis.title.x = element_text(color="black", size=20, face="bold"),
+axis.title.y = element_text(color="black", size=20, face="bold"),plot.background = element_rect(fill = "#b0e0e6"))
+
+myplot <- theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"))
+```
+
+###  Number of Crimes in All Location
+
+
+```{r allCrimes, echo=FALSE,fig.width=15, fig.height=15, message=FALSE}
+ggplot(data=crimesBig, aes(x=Year)) + geom_histogram(color='#f4f6f7', stat='count', aes(fill=crimesBig$Primary.Type), alpha=.8) + ylab('Occurences') + ggtitle('Crimes Per Year - All Locations')+scale_x_discrete(breaks = unique(crimesBig$Year),expand=c(0,0)) +scale_y_continuous(labels= scales::comma,expand=c(0,0))+theme_economist()+myLegend+myFill
+```
+
+*List of types of crimes in all location per year and the number of reported cases.*
+```{r, echo=FALSE, message=FALSE, include=FALSE}
+allCrimes <- crimesBig %>% group_by(Primary.Type) %>% tally()
+schoolCrimes<-crimes %>% group_by(Primary.Type) %>% tally()
+dfCrimes <- merge(allCrimes, schoolCrimes, by="Primary.Type", all.x = TRUE)
+colnames(dfCrimes) <- c('Crime Type', 'All Crimes', 'Crimes in School')
+as.factor(dfCrimes$`Crime Type`)
+
+
+```
+
+
+```{r}
+dfCrimes[order(-dfCrimes$`All Crimes`), ][1:2]
+```
+
+
+
+```{r, echo=FALSE, fig.height=15, fig.width=50, message=FALSE}
+
+ggplot(dfCrimes, aes(y=dfCrimes$`All Crimes`, x=reorder(dfCrimes$`Crime Type`, dfCrimes$`All Crimes`))) + geom_bar(stat='identity')+coord_flip()+scale_y_discrete(labels= scales::comma, expand=c(0,0), waiver())+ylab(NULL)+xlab(NULL)+theme_economist(horizontal=FALSE)
+```
+
+
+####Number of Crimes in School Grounds
+```{r crimesSchool, echo=FALSE,fig.width=15, fig.height=15}
+ggplot(data=crimes, aes(x=Year)) + geom_histogram(color='gray', stat='count', aes(fill=crimes$Primary.Type), alpha=.8) + ylab('Occurences') + ggtitle('Crimes Per Year - School Grounds')+scale_x_discrete(breaks = unique(crimes$Year), expand=c(0,0)) +scale_y_continuous(labels= scales::comma, breaks=seq(0,15000, 1000), expand=c(0,0))+ theme_economist()+myLegend+myFill
+```
+
+
+*List of types of crimes in school and the number of cases.*
+```{r, echo=FALSE}
+inSchool <-(dfCrimes[which(dfCrimes$`Crimes in School` > 0),]) [c(1,3)]
+sorted <- order(-inSchool['Crimes in School'])
+inSchool[sorted, ]
+```
+
+  
+*Crimes that doesnt occur in school: *  
+1. Conceealed Caryy License Violation  
+2. Domestic Violence  
+3. Non -Criminal  
+4. Non-Criminal  
+5. Non-Criminal (Subject Specified)  
+
+*Top five crimes that occur in school: *  
+1. Battery  
+2. Theft  
+3. Assault
+4. Criminal Damage  
+5. Narcotics  
+
+
+
+```{r crimesInSchool, echo=FALSE,fig.width=15, fig.height=15}
+ggplot(inSchool, aes(y=inSchool$`Crimes in School`, x=reorder(inSchool$`Crime Type`, inSchool$`Crimes in School`))) + geom_bar(stat='identity')+coord_flip()+scale_y_discrete(labels= scales::comma, expand=c(0,0))+ylab(NULL)+xlab(NULL)+theme_economist(horizontal=FALSE)+ggtitle("Number of Occurences in School")
+```
+
+
+*Graph showing the frequency of crime types per year in school per season*
+```{r season, echo=FALSE, fig.width=10, fig.height=10}
+ggplot(crimes, aes(x=Year)) +geom_bar(aes(fill=Primary.Type), width=.8, alpha=.8) +facet_wrap(~Season)+ggtitle("Crimes Per Year in School Split by Season")+
+scale_x_discrete(breaks = unique(crimes$Year),expand=c(0,0))+theme_economist(horizontal = TRUE)+theme( axis.text.x = element_text(angle = 90, hjust = 1), legend.title = element_blank(), legend.text = element_text(size=6))+myFill
+```
+
+Which seasons has the most crimes?
+
+Descriptive Statistic
+
+```{r dfSeason, echo=FALSE}
+
+dfSeason <- as.data.frame(rbind(table(crimes$Year, crimes$Season)))
+print(summary(dfSeason))
+print(t.test(dfSeason$winter, dfSeason$fall))
+```
+
+
+
+
+
+
+###Kidnapping in School Grounds
+
+```{r kid, echo=FALSE, fig.width=10, fig.height=10}
+ggplot(crimes[crimes$Primary.Type=='KIDNAPPING', ], aes(x=Year))+geom_bar(aes(fill=Domestic),alpha=.8)+ scale_y_continuous( breaks=seq(0,40, 1), expand=c(0,0))+ylab('Count')+ggtitle("Kidnapping: School")+guides(fill=guide_legend(title="Domestic"))+theme_economist()
+```
+
+
+
+
+*There were 198 kidnappings from 2001-2016.*  
++ 22% were domestic related  
++ 11% of those cases resulted in an arrest; 3% are from domestic cases  
++ 2002 had the most kidnapping cases  
++ 2012 and 2014 had the least kidnapping cases  
+
+```{r, echo=FALSE, include==FALSE}
+sum(crimes$Primary.Type=='KIDNAPPING')
+sum(crimes$Domestic=='true' &crimes$Primary.Type=='KIDNAPPING')/sum(crimes$Primary.Type=='KIDNAPPING')
+sum(crimes$Arrest=='true' & crimes$Primary.Type=='KIDNAPPING')/sum(crimes$Primary.Type=='KIDNAPPING')
+sum(crimes$Primary.Type=='KIDNAPPING' &crimes$Domestic=='true' &crimes$Arrest=='true')/sum(crimes$Primary.Type=='KIDNAPPING')
+```
+
+
+Compared to kidnapping in other locations:
+
+
+```{r kidOther, echo=FALSE, fig.width=10, fig.height=10}
+ggplot(crimesBig[crimesBig$Primary.Type=='KIDNAPPING'& crimesBig$SchoolGrounds==FALSE, ], aes(x=Year))+geom_bar(aes(fill=Domestic),alpha=.8)+ scale_y_continuous(expand=c(0,0))+ylab('Count')+ggtitle("Kidnapping: Other Locations")+guides(fill=guide_legend(title="Domestic"))+theme_economist()
+```
+
+
+*There were 6129 kidnapping cases.*
++ 27% were domestic related
++ 11% of those cases resulted in an arrest; 32% of which where domestic related
++ 2001 had the most kidnapping
++ 2015 had the least kidnapping
+
+```{r, echo=FALSE}
+sum(crimesBig$Primary.Type=='KIDNAPPING' & crimesBig$SchoolGrounds==FALSE)
+
+sum(crimesBig$Domestic=='true' & crimesBig$Primary.Type=='KIDNAPPING'& crimesBig$SchoolGrounds==FALSE)/sum(crimesBig$Primary.Type=='KIDNAPPING'& crimesBig$SchoolGrounds==FALSE)
+
+sum(crimesBig$Arrest=='true' & crimesBig$Primary.Type=='KIDNAPPING'& crimesBig$SchoolGrounds==FALSE)/sum(crimesBig$Primary.Type=='KIDNAPPING'& crimesBig$SchoolGrounds==FALSE)
+
+sum(crimesBig$Primary.Type=='KIDNAPPING'& crimesBig$SchoolGrounds==FALSE & crimesBig$Domestic=='true' & crimesBig$Arrest=='true')/sum(crimesBig$Primary.Type=='KIDNAPPING'& crimesBig$SchoolGrounds==FALSE)
+```
+
+
+
+###Assault/Battery in School Grounds
+```{r assaultBattery, echo=FALSE, fig.width=10, fig.height=10}
+asBat <- c('ASSAULT', 'BATTERY')
+ggplot(crimes[crimes$Primary.Type %in% asBat, ], aes(x=Year))+geom_bar(aes(fill=Arrest),alpha=.8)+ scale_y_continuous( expand=c(0,0))+ylab('Count')+theme_economist()
+```
+
+
+*There were 90,717 assault and battery cases.*      
++ 28% of those cases resulted in an arrest  
++ 11% of those cases resulted in an arrest; 32% of which where domestic related  
++ 2004 had the most  
++ 2016 had the least  
+
+```{r, echo=FALSE, include=FALSE,fig.width=10, fig.height=10}
+sum(crimes$Primary.Type %in% asBat &crimes$Arrest =='true')/sum(crimes$Primary.Type %in% asBat)#percent of arrest
+sum(crimes$Primary.Type %in% asBat)#total number of crimes
+
+```
+
+
+
+###Weapons Violation in School Grounds
+```{r weapons, echo=FALSE, fig.width=10, fig.height=10}
+ggplot(crimes[crimes$Primary.Type == 'WEAPONS VIOLATION', ], aes(x=Year))+geom_bar(aes(fill=Arrest),alpha=.8)+ scale_y_continuous( expand=c(0,0))+ylab('Count')+theme_economist()
+```
+
+```{r, echo=FALSE, include=FALSE}
+sum(crimes$Primary.Type == 'WEAPONS VIOLATION' & crimes$Arrest=='true')/sum(crimes$Primary.Type=='WEAPONS VIOLATION')#percent of arrest
+sum(crimes$Primary.Type == 'WEAPONS VIOLATION')#total number of crimes
+
+```
+
+*There were 5,281 weapons violation cases.*  
++ 50% of those cases resulted in an arrest  
++ 2002 had the most  
++ 2015 had the least  
+
+###Sex Related Crimes
+```{r, echo=FALSE,fig.width=10, fig.height=10}
+sex<- c('HUMAN TRAFFICKING',"PUBLIC INDECENCY" ,"OBSCENITY","SEX OFFENSE","CRIM SEXUAL ASSAULT","OFFENSE INVOLVING CHILDREN","PROSTITUTION")
+
+ggplot(crimes[crimes$Primary.Type %in% sex, ], aes(x=Year))+geom_bar(aes(fill=Primary.Type),alpha=.8)+ scale_y_continuous(breaks=seq(0,300,10), expand=c(0,0))+ylab('Count')+theme_economist()+theme(legend.title = element_blank(), legend.text = element_text(size=8))
+```
+
+
+
+
+
+
+### School Coordinates with most crimes
+
+
+```{r removeNA, echo=FALSE}
+dfCoords <- subset(crimes, !is.na(Longitude) & !is.na(Latitude))#clean data set, remove locations =null
+
+dfCoords <- select(dfCoords, Block, Latitude, Longitude, District, Location) #select just the Block, Latitude, Longitude, District
+
+dfCount<- count(dfCoords$Location)
+dfCountSorted<-arrange(dfCount, desc(freq))
+dfCoordsJoin <- inner_join(dfCountSorted, dfCoords, by = c("x" ="Location"))
+mapCoords<-dfCoordsJoin[!duplicated(dfCoordsJoin$x),][1:50, ]#grab 50 largest rows
+mapCoords<-arrange(mapCoords, desc(freq))#sort desc
+```
+
+```{r, echo=FALSE,fig.width=15, fig.height=15}
+ggplot(mapCoords, aes(x=reorder(Block, freq), y=freq)) +
+  geom_bar(stat="identity")+coord_flip()+theme_economist()+scale_y_continuous(expand=c(0,0))+scale_x_discrete(expand=c(0,0))+xlab('Block')+ylab('Count')+ggtitle('Top 50 Blocks With Reported Crimes')+theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+```
+
+
+
+
+```{r plotMap, echo=FALSE}
+#plot(chicago)
+chimap = qmap("Chicago", zoom = 12, color = "color", legend = "topleft")
+```
+
+
+
+```{r, echo=FALSE, message=FALSE,fig.width=15, fig.height=15}
+lon <- c(-87.647248118,-87.647938205,-87.662544385,-87.751958893,-87.720089827,-87.756977729,-87.673019415,-87.740255128,-87.701586039)
+
+lat <- c(41.954492668, 41.774133601, 41.768086308, 41.879527422,41.855245158, 41.89515102, 41.997922563, 41.881212919, 41.946538954) 
+df <- as.data.frame(cbind(lon,lat))
+chiMap <- get_map(location = c(lon = mean(df$lon), lat = mean(df$lat)), zoom = 11, maptype = "roadmap", scale = 2)
+
+ggmap(chiMap) + geom_point(data = mapCoords, aes(x = Longitude, y = Latitude), size = 2, color="red")+theme_economist()+theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),axis.text.x = element_blank(),axis.text.y = element_blank(),axis.ticks = element_blank())+theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+ylab(NULL)+xlab(NULL)
+```
